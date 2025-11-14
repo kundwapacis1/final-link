@@ -1,5 +1,6 @@
 {"name":"local-link-backend",
 "version":"1.0.0",
+"main": "index.js",
 "type":"module",
 "scripts":{"start":"node index.js"},
 "dependencies":{"bonjour":"^3.3.0",
