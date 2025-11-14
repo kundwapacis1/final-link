@@ -1,4 +1,4 @@
-const SERVER_IP = '192.168.1.x'; // <- replace with your LAN IP
+const SERVER_IP = ' 172.31.220.18'; // <- replace with your LAN IP
 const socket = io(`http://${SERVER_IP}:5000`);
 
 const roomInput = document.getElementById('room');
