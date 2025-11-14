@@ -1,5 +1,4 @@
-const SERVER_IP = ' 172.31.220.18'; // <- replace with your LAN IP
-const socket = io(`http://${SERVER_IP}:5000`);
+const socket = io(); // connects automatically to the backend server
 
 const roomInput = document.getElementById('room');
 const joinBtn = document.getElementById('joinBtn');
@@ -13,76 +12,71 @@ const uploadBtn = document.getElementById('uploadBtn');
 const fileList = document.getElementById('files');
 
 let currentRoom = 'lobby';
+const API_URL = window.location.origin; // dynamic backend URL
 
 // --- Join room
 joinBtn.onclick = async () => {
-  currentRoom = roomInput.value.trim() || 'lobby';
+  currentRoom = roomInput.value || 'lobby';
   socket.emit('join-room', currentRoom);
-  await fetchTexts();
-  await fetchFiles();
+
+  // Load previous messages
+  const resText = await fetch(`${API_URL}/api/text/list?room=${currentRoom}`);
+  const texts = await resText.json();
+  messagesDiv.innerHTML = '';
+  texts.reverse().forEach(t => addMessage(t.sender, t.content));
+
+  // Load files
+  const resFiles = await fetch(`${API_URL}/api/files`);
+  const files = await resFiles.json();
+  fileList.innerHTML = '';
+  files.forEach(f => addFile(f.originalName, `${API_URL}${f.url}`));
 };
 
-// --- Send chat message
+// --- Send text
 sendBtn.onclick = async () => {
-  const sender = nameInput.value.trim() || 'Anonymous';
+  const sender = nameInput.value || 'Anonymous';
   const content = messageInput.value.trim();
   if (!content) return;
 
   socket.emit('chat-message', { room: currentRoom, sender, message: content });
   addMessage('You', content);
 
-  await fetch(`http://${SERVER_IP}:5000/api/text/send`, {
+  await fetch(`${API_URL}/api/text/send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sender, content, room: currentRoom })
+    body: JSON.stringify({ content, room: currentRoom, sender })
   });
 
   messageInput.value = '';
 };
 
-// --- Receive text via socket
-socket.on('chat-message', (data) => {
+// --- Receive text
+socket.on('chat-message', data => {
   addMessage(data.sender, data.message);
 });
-
-// --- Fetch chat history
-async function fetchTexts() {
-  const res = await fetch(`http://${SERVER_IP}:5000/api/text/list?room=${currentRoom}`);
-  const texts = await res.json();
-  messagesDiv.innerHTML = '';
-  texts.reverse().forEach(t => addMessage(t.sender, t.content));
-}
 
 // --- Upload file
 uploadBtn.onclick = async () => {
   if (!fileInput.files.length) return alert('Select a file');
-
   const form = new FormData();
   form.append('file', fileInput.files[0]);
+  form.append('room', currentRoom);
 
-  const res = await fetch(`http://${SERVER_IP}:5000/api/files/upload`, {
+  const res = await fetch(`${API_URL}/api/files/upload`, {
     method: 'POST',
     body: form
   });
 
   const fileMeta = await res.json();
   socket.emit('file-shared', { room: currentRoom, ...fileMeta });
-  addFile(fileMeta.originalName, `http://${SERVER_IP}:5000${fileMeta.url}`);
+  addFile(fileMeta.originalName, `${API_URL}${fileMeta.url}`);
   fileInput.value = '';
 };
 
-// --- Receive file via socket
-socket.on('file-shared', (file) => {
-  addFile(file.originalName, `http://${SERVER_IP}:5000${file.url}`);
+// --- Receive file
+socket.on('file-shared', file => {
+  addFile(file.originalName, `${API_URL}${file.url}`);
 });
-
-// --- Fetch files list
-async function fetchFiles() {
-  const res = await fetch(`http://${SERVER_IP}:5000/api/files/list?room=${currentRoom}`);
-  const files = await res.json();
-  fileList.innerHTML = '';
-  files.forEach(f => addFile(f.originalName, `http://${SERVER_IP}:5000${f.url}`));
-}
 
 // --- Helper functions
 function addMessage(sender, message) {
@@ -100,7 +94,3 @@ function addFile(name, url) {
   li.appendChild(a);
   fileList.prepend(li);
 }
-
-// --- Load initial data
-fetchTexts();
-fetchFiles();
