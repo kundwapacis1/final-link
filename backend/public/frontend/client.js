@@ -60,7 +60,7 @@ uploadBtn.onclick = async () => {
   const form = new FormData();
   form.append('file', fileInput.files[0]);
 
-  const res = await fetch(`http://${SERVER_IP}:5000/api/file/upload`, {
+  const res = await fetch(`http://${SERVER_IP}:5000/api/files/upload`, {
     method: 'POST',
     body: form
   });
