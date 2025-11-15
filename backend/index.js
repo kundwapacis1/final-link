@@ -78,6 +78,10 @@ mongoose.connect(process.env.MONGO_URI)
 // --- Routes
 app.use('/api/files', fileRoutes);
 app.use('/api/text', textRoutes);
+app.get("/", (req, res) => {
+  res.send("Backend API is running 🎉");
+});
+
 
 // --- Socket.io for chat & file
 io.on('connection', socket => {
