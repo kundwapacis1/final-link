@@ -1,65 +1,51 @@
-// controllers/fileController.js
-import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
+import mongoose from "mongoose";
+import multer from "multer";
+import { GridFSBucket } from "mongodb";
+import { Readable } from "stream";
 
-// --- Multer storage setup
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join('public', 'uploads');
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // unique filename: timestamp + original name
-    const uniqueName = Date.now() + '-' + file.originalname.replace(/\s+/g, '_');
-    cb(null, uniqueName);
-  }
+const conn = mongoose.connection;
+let gfsBucket;
+
+conn.once("open", () => {
+  gfsBucket = new GridFSBucket(conn.db, { bucketName: "uploads" });
+  console.log("GridFSBucket initialized");
 });
 
-// --- File filter
-const fileFilter = (req, file, cb) => {
-  // Allowed MIME types (images, pdf, txt, docs)
-  const allowedTypes = [
-    'image/png', 'image/jpeg', 'image/jpg', 
-    'application/pdf', 'text/plain', 
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  ];
+// Multer memory storage
+const storage = multer.memoryStorage();
+export const upload = multer({ storage });
 
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('File type not allowed'), false);
-  }
-};
-
-// --- Multer upload instance
-export const upload = multer({ 
-  storage,
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
-  fileFilter
-});
-
-// --- Upload controller
 export const uploadFile = (req, res) => {
-  if (!req.file) return res.status(400).json({ message: 'No file uploaded or invalid type' });
+  if (!req.file) return res.status(400).send("No file uploaded");
 
-  const fileMeta = {
-    originalName: req.file.originalname,
-    url: `/files/${req.file.filename}`,
-    size: req.file.size
-  };
+  const readableFile = new Readable();
+  readableFile.push(req.file.buffer);
+  readableFile.push(null);
 
-  return res.status(201).json(fileMeta);
+  const uploadStream = gfsBucket.openUploadStream(req.file.originalname, {
+    contentType: req.file.mimetype,
+  });
+
+  readableFile.pipe(uploadStream)
+    .on("error", (err) => res.status(500).send(err.message))
+    .on("finish", () => res.status(201).json({ 
+        fileId: uploadStream.id, 
+        filename: req.file.originalname 
+    }));
 };
 
-// LIST FILES
-export const listFiles = async (req, res) => {
-    try {
-        const files = await File.find().sort({ createdAt: -1 });
-        res.status(200).json(files);
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching files', error });
-    }
+export const downloadFile = (req, res) => {
+  const { filename } = req.params;
+
+  gfsBucket.find({ filename }).toArray((err, files) => {
+    if (!files || files.length === 0) return res.status(404).send("File not found");
+
+    const downloadStream = gfsBucket.openDownloadStreamByName(filename);
+    res.set({
+      "Content-Type": files[0].contentType,
+      "Content-Disposition": `attachment; filename="${filename}"`,
+    });
+
+    downloadStream.pipe(res);
+  });
 };

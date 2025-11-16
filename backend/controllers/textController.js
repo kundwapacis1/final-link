@@ -1,27 +1,17 @@
-// controllers/textController.js
-import Text from '../models/textModel.js';
+// Simple in-memory storage for demo (replace with MongoDB if needed)
+let texts = [];
 
-// Send a new text message
-export const sendText = async (req, res) => {
-  try {
-    const { sender, content, room } = req.body;
-    if (!content) return res.status(400).json({ message: 'Content required' });
+export const sendText = (req, res) => {
+  const { room, message, sender } = req.body;
+  if (!message || !room) return res.status(400).send("Invalid data");
 
-    const text = await Text.create({ sender, content, room });
-    res.status(201).json(text);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+  const newMessage = { room, message, sender, timestamp: new Date() };
+  texts.push(newMessage);
+  res.status(201).json(newMessage);
 };
 
-// Get all text messages or by room
-export const getTexts = async (req, res) => {
-  try {
-    const { room } = req.query;
-    const filter = room ? { room } : {};
-    const texts = await Text.find(filter).sort({ createdAt: -1 });
-    res.status(200).json(texts);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+export const getTexts = (req, res) => {
+  const { room } = req.params;
+  const roomMessages = texts.filter(t => t.room === room);
+  res.json(roomMessages);
 };
