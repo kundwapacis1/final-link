@@ -69,7 +69,13 @@ const io = new Server(server, {
 });
 
 // --- Middleware
-app.use(cors());
+app.use(cors({
+    origin: "*",
+    methods: "GET,POST"
+}));
+//
+
+
 app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "public", "uploads"))); // optional static folder
 
